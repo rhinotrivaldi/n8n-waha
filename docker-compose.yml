@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  n8n:
+    image: n8nio/n8n
+    restart: unless-stopped
+    ports:
+      - "${N8N_PORT}:5678"
+    environment:
+      - TZ=Asia/Jakarta
+      - N8N_BASIC_AUTH_ACTIVE=${N8N_BASIC_AUTH_ACTIVE}
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - N8N_HOST=${N8N_HOST}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=${N8N_PROTOCOL}
+      - N8N_EMAIL_MODE=${N8N_EMAIL_MODE}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_SENDER=${SMTP_SENDER}
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - automation_network
+
+  waha:
+    image: devlikeapro/waha
+    restart: unless-stopped
+    ports:
+      - "${WAHA_PORT}:3000"
+    environment:
+      - TZ=Asia/Jakarta
+      - WHATSAPP_DEFAULT_ENGINE=${WHATSAPP_DEFAULT_ENGINE}
+      - API_KEY=${WAHA_API_KEY}
+    volumes:
+      - waha_sessions:/app/.sessions
+    networks:
+      - automation_network
+
+networks:
+  automation_network:
+    driver: bridge
+
+volumes:
+  n8n_data:
+  waha_sessions:
