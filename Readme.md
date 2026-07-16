@@ -64,4 +64,4 @@ docker compose down            # stop (data aman di named volume)
 
 ## Lisensi
 
-Bebas digunakan untuk keperluan pribadi maupun komersial.
+MIT
