@@ -1,0 +1,37 @@
+### Contoh request API WAHA (pakai VS Code extension "REST Client")
+### Sesuaikan @baseUrl dan @apiKey dengan environment Anda.
+
+@baseUrl = http://localhost:3000
+@apiKey = GANTI_DENGAN_WAHA_API_KEY
+@session = default
+
+### Cek status server
+GET {{baseUrl}}/api/server/status
+X-Api-Key: {{apiKey}}
+
+### Mulai session WhatsApp
+POST {{baseUrl}}/api/sessions/{{session}}/start
+X-Api-Key: {{apiKey}}
+
+### Cek status session (scan QR via dashboard jika status SCAN_QR_CODE)
+GET {{baseUrl}}/api/sessions/{{session}}
+X-Api-Key: {{apiKey}}
+
+### Ambil QR code untuk login
+GET {{baseUrl}}/api/{{session}}/auth/qr
+X-Api-Key: {{apiKey}}
+
+### Kirim pesan teks
+POST {{baseUrl}}/api/sendText
+X-Api-Key: {{apiKey}}
+Content-Type: application/json
+
+{
+  "session": "{{session}}",
+  "chatId": "6281234567890@c.us",
+  "text": "Halo dari WAHA! 👋"
+}
+
+### Stop session
+POST {{baseUrl}}/api/sessions/{{session}}/stop
+X-Api-Key: {{apiKey}}

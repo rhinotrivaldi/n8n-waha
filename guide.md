@@ -1,43 +1,46 @@
-# Panduan Instalasi n8n & WAHA di VPS dengan Docker
+# Panduan Instalasi n8n + WAHA di VPS dengan Docker
 
-## 📝 Daftar Isi
-1. [Spesifikasi Minimal VPS](#-spesifikasi-minimal-vps)
-2. [Setup Awal VPS](#-setup-awal-vps)
-3. [Konfigurasi Keamanan](#-konfigurasi-keamanan)
-4. [Instalasi Docker](#-instalasi-docker)
-5. [Deploy n8n + WAHA](#-deploy-n8n--waha)
-6. [Optimasi & Monitoring](#-optimasi--monitoring)
-7. [Troubleshooting](#-troubleshooting)
+Panduan lengkap dari VPS kosong sampai stack berjalan dengan HTTPS. Untuk gambaran umum project, lihat [Readme.md](Readme.md).
+
+## Daftar Isi
+
+1. [Spesifikasi Minimal VPS](#spesifikasi-minimal-vps)
+2. [Setup Awal VPS](#setup-awal-vps)
+3. [Konfigurasi Keamanan](#konfigurasi-keamanan)
+4. [Instalasi Docker](#instalasi-docker)
+5. [Deploy n8n + WAHA](#deploy-n8n--waha)
+6. [Reverse Proxy & SSL](#reverse-proxy--ssl)
+7. [Backup Otomatis](#backup-otomatis)
+8. [Update & Maintenance](#update--maintenance)
+9. [Troubleshooting](#troubleshooting)
 
 ---
 
-## 🖥️ Spesifikasi Minimal VPS
-- **OS**: Ubuntu 20.04/22.04 LTS
-- **CPU**: 2 vCPU cores
+## Spesifikasi Minimal VPS
+
+- **OS**: Ubuntu 22.04 / 24.04 LTS
+- **CPU**: 2 vCPU
 - **RAM**: 4 GB
 - **Storage**: 25 GB SSD
-- **Port Terbuka**: 22 (SSH), 80 (HTTP), 443 (HTTPS)
+- **Port terbuka**: 22 (SSH), 80 (HTTP), 443 (HTTPS)
 
 ---
 
-## 🛠️ Setup Awal VPS
+## Setup Awal VPS
 
-### Login ke VPS
 ```bash
-ssh -p 22 username@ip-vps
-```
+ssh username@ip-vps
 
-### Update Sistem
-```bash
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y curl git nano htop ufw
+sudo apt install -y curl git nano ufw
 ```
 
 ---
 
-## 🔒 Konfigurasi Keamanan
+## Konfigurasi Keamanan
 
-### 1. Setup Firewall (UFW)
+### 1. Firewall (UFW)
+
 ```bash
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
@@ -47,308 +50,188 @@ sudo ufw allow 443/tcp
 sudo ufw enable
 ```
 
+> Port 5678 (n8n) dan 3000 (WAHA) **tidak perlu dibuka** — container hanya bind ke `127.0.0.1` dan diakses lewat Nginx.
+
 ### 2. Hardening SSH
-Edit file config:
 
 ```bash
 sudo nano /etc/ssh/sshd_config
 ```
 
-Ubah parameter:
+Ubah parameter berikut (pastikan SSH key Anda sudah terpasang sebelum mematikan password auth):
 
 ```ini
-Port 2222
 PermitRootLogin no
 PasswordAuthentication no
 AllowUsers your_username
 ```
 
-Restart SSH:
-
 ```bash
-sudo systemctl restart sshd
+sudo systemctl restart ssh
 ```
 
 ---
 
-## 🐳 Instalasi Docker
+## Instalasi Docker
 
-### 1. Install Docker Engine
+Script resmi sudah termasuk Docker Compose v2 (plugin) — tidak perlu install `docker-compose` terpisah:
+
 ```bash
 curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker $USER
 newgrp docker
-```
 
-### 2. Install Docker Compose
-```bash
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
-```
-
-### 3. Verifikasi Instalasi
-```bash
-docker --version && docker-compose --version
+docker --version && docker compose version
 ```
 
 ---
 
-## 🚀 Deploy n8n + WAHA
+## Deploy n8n + WAHA
 
-### 1. Buat Direktori Proyek
-```bash
-mkdir ~/automation && cd ~/automation
-```
+### 1. Clone repo & konfigurasi
 
-### 2. Buat file .env untuk konfigurasi keamanan
 ```bash
+git clone <repo-url> ~/n8n-waha && cd ~/n8n-waha
+
+cp .env-example .env
 nano .env
-```
-
-Isi dengan:
-
-```env
-# n8n credentials
-N8N_BASIC_AUTH_ACTIVE=true
-N8N_BASIC_AUTH_USER=admin
-N8N_BASIC_AUTH_PASSWORD=password_kuat_n8n
-N8N_ENCRYPTION_KEY=kunci_enkripsi_yang_sangat_rahasia_dan_panjang
-N8N_PORT=5678
-
-# URL dan domain
-N8N_HOST=n8n.example.com
-N8N_PROTOCOL=https
-N8N_EMAIL_MODE=smtp
-
-# SMTP settings
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_USER=user@example.com
-SMTP_PASS=smtp_password
-SMTP_SENDER=n8n@example.com
-
-# WAHA configuration
-WAHA_PORT=3000
-WHATSAPP_DEFAULT_ENGINE=NOWEB
-WAHA_API_KEY=api_key_yang_sangat_rahasia
-```
-
-### 3. Buat docker-compose.yml yang menggunakan file .env
-```bash
-nano docker-compose.yml
-```
-
-Isi dengan:
-
-```yaml
-version: '3.8'
-
-services:
-  n8n:
-    image: n8nio/n8n
-    restart: unless-stopped
-    ports:
-      - "${N8N_PORT}:5678"
-    environment:
-      - N8N_BASIC_AUTH_ACTIVE=${N8N_BASIC_AUTH_ACTIVE}
-      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER}
-      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-      - N8N_HOST=${N8N_HOST}
-      - N8N_PROTOCOL=${N8N_PROTOCOL}
-      - N8N_EMAIL_MODE=${N8N_EMAIL_MODE}
-      - SMTP_HOST=${SMTP_HOST}
-      - SMTP_PORT=${SMTP_PORT}
-      - SMTP_USER=${SMTP_USER}
-      - SMTP_PASS=${SMTP_PASS}
-      - SMTP_SENDER=${SMTP_SENDER}
-    volumes:
-      - n8n_data:/home/node/.n8n
-    networks:
-      - automation_network
-
-  waha:
-    image: devlikeapro/waha
-    restart: unless-stopped
-    ports:
-      - "${WAHA_PORT}:3000"
-    volumes:
-      - waha_sessions:/app/.sessions
-    environment:
-      - WHATSAPP_DEFAULT_ENGINE=${WHATSAPP_DEFAULT_ENGINE}
-      - API_KEY=${WAHA_API_KEY}
-    networks:
-      - automation_network
-
-networks:
-  automation_network:
-    driver: bridge
-
-volumes:
-  n8n_data:
-  waha_sessions:
-```
-
-### 4. Jalankan Kontainer
-```bash
-docker-compose up -d
-```
-
-### 5. Verifikasi
-- n8n: http://ip-vps:5678 atau https://n8n.example.com
-- WAHA API: http://ip-vps:3000
-
-Cek status:
-
-```bash
-docker-compose ps
-```
-
-### 6. Keamanan File .env
-Pastikan file .env memiliki permission yang aman:
-
-```bash
 chmod 600 .env
 ```
 
+Wajib diisi di `.env`:
+
+| Variabel | Keterangan |
+|----------|------------|
+| `N8N_HOST` / `WAHA_HOST` | Domain masing-masing service |
+| `N8N_ENCRYPTION_KEY` | `openssl rand -hex 32` — **jangan pernah diganti** setelah n8n jalan (kredensial tersimpan terenkripsi dengan key ini) |
+| `WAHA_API_KEY` | `openssl rand -hex 32` — dikirim sebagai header `X-Api-Key` |
+| `WAHA_DASHBOARD_PASSWORD` | Password login dashboard WAHA |
+
+### 2. Jalankan
+
+```bash
+docker compose up -d
+docker compose ps
+docker compose logs -f
+```
+
+### 3. Setup awal aplikasi
+
+- **n8n**: buka `https://n8n.example.com` → buat akun **owner** pada kunjungan pertama. (n8n v1+ memakai user management bawaan; basic auth sudah dihapus.)
+- **WAHA**: buka `https://waha.example.com/dashboard` → login → start session `default` → scan QR dari HP.
+
+Tes kirim pesan (atau pakai [waha-api.rest](waha-api.rest)):
+
+```bash
+curl -X POST https://waha.example.com/api/sendText \
+  -H "X-Api-Key: $WAHA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"session": "default", "chatId": "6281234567890@c.us", "text": "Halo dari WAHA!"}'
+```
+
 ---
 
-## ⚡ Optimasi & Monitoring
+## Reverse Proxy & SSL
 
-### 1. Reverse Proxy dengan Nginx
+### 1. Install Nginx + Certbot
+
 ```bash
 sudo apt install -y nginx certbot python3-certbot-nginx
-sudo nano /etc/nginx/sites-available/n8n
 ```
 
-Contoh config:
+### 2. Pasang config
 
-```nginx
-server {
-    listen 80;
-    server_name n8n.example.com;
-    
-    location / {
-        proxy_pass http://localhost:5678;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-Aktifkan konfigurasi dan SSL:
+Template ada di folder [nginx/](nginx/) — sudah termasuk header WebSocket yang **wajib** untuk editor n8n:
 
 ```bash
+sudo cp nginx/n8n.conf /etc/nginx/sites-available/n8n
+sudo cp nginx/waha.conf /etc/nginx/sites-available/waha
+sudo nano /etc/nginx/sites-available/n8n   # ganti n8n.example.com dengan domain Anda
+sudo nano /etc/nginx/sites-available/waha  # ganti waha.example.com dengan domain Anda
+
 sudo ln -s /etc/nginx/sites-available/n8n /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-sudo certbot --nginx -d n8n.example.com
-```
-
-Buat juga config untuk WAHA API jika diperlukan:
-
-```bash
-sudo nano /etc/nginx/sites-available/waha
-```
-
-Contoh config:
-
-```nginx
-server {
-    listen 80;
-    server_name waha.example.com;
-    
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-Aktifkan konfigurasi dan SSL:
-
-```bash
 sudo ln -s /etc/nginx/sites-available/waha /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-sudo certbot --nginx -d waha.example.com
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
-### 2. Backup Otomatis
-Buat script `/usr/local/bin/backup_automation.sh`:
+### 3. SSL (Let's Encrypt)
+
+```bash
+sudo certbot --nginx -d n8n.example.com -d waha.example.com
+```
+
+Certbot memasang auto-renewal otomatis; cek dengan `sudo certbot renew --dry-run`.
+
+---
+
+## Backup Otomatis
+
+Buat `/usr/local/bin/backup-n8n-waha.sh`:
 
 ```bash
 #!/bin/bash
-BACKUP_DIR="/home/user/backups"
+set -euo pipefail
+
+BACKUP_DIR="$HOME/backups"
+PROJECT_DIR="$HOME/n8n-waha"
 DATE=$(date +%Y%m%d)
 
-# Buat direktori backup jika belum ada
-mkdir -p $BACKUP_DIR
+mkdir -p "$BACKUP_DIR"
 
-# Backup n8n data
-docker run --rm --volumes-from automation_n8n_1 -v $BACKUP_DIR:/backup ubuntu tar czf /backup/n8n_backup_$DATE.tar.gz /home/node/.n8n
+# Backup named volume langsung (tidak tergantung nama container)
+# Prefix volume = nama folder project, cek dengan: docker volume ls
+docker run --rm -v n8n-waha_n8n_data:/data -v "$BACKUP_DIR":/backup alpine \
+  tar czf "/backup/n8n_$DATE.tar.gz" -C /data .
 
-# Backup file .env
-cp /home/user/automation/.env $BACKUP_DIR/env_backup_$DATE.txt
+docker run --rm -v n8n-waha_waha_sessions:/data -v "$BACKUP_DIR":/backup alpine \
+  tar czf "/backup/waha_$DATE.tar.gz" -C /data .
 
-# Backup WAHA sessions
-docker run --rm --volumes-from automation_waha_1 -v $BACKUP_DIR:/backup ubuntu tar czf /backup/waha_backup_$DATE.tar.gz /app/.sessions
+cp "$PROJECT_DIR/.env" "$BACKUP_DIR/env_$DATE"
+chmod 600 "$BACKUP_DIR/env_$DATE"
 
-# Rotasi backup (simpan hanya 7 backup terakhir)
-find $BACKUP_DIR -name "n8n_backup_*.tar.gz" -type f -mtime +7 -delete
-find $BACKUP_DIR -name "env_backup_*.txt" -type f -mtime +7 -delete
-find $BACKUP_DIR -name "waha_backup_*.tar.gz" -type f -mtime +7 -delete
+# Simpan 7 hari terakhir
+find "$BACKUP_DIR" -type f -mtime +7 -delete
 ```
 
-Jadwalkan dengan crontab:
+Jadwalkan tiap jam 3 pagi:
 
 ```bash
-chmod +x /usr/local/bin/backup_automation.sh
-crontab -e
+chmod +x /usr/local/bin/backup-n8n-waha.sh
+(crontab -l 2>/dev/null; echo "0 3 * * * /usr/local/bin/backup-n8n-waha.sh") | crontab -
 ```
 
-Tambahkan baris:
-
-```
-0 3 * * * /usr/local/bin/backup_automation.sh
-```
+> Backup `.env` berisi secret — simpan salinan off-server di tempat yang aman (password manager / storage terenkripsi).
 
 ---
 
-## 🐞 Troubleshooting
+## Update & Maintenance
+
+```bash
+cd ~/n8n-waha
+docker compose pull
+docker compose up -d
+docker image prune -f
+```
+
+Data aman di named volume; update image tidak menghapus workflow atau session WhatsApp.
+
+---
+
+## Troubleshooting
 
 | Masalah | Solusi |
 |---------|--------|
-| Port tidak terbuka | `sudo ufw allow port/tcp` |
-| Kontainer gagal start | `docker-compose logs -f nama_service` |
-| WAHA disconnect | Tambahkan resource limit di docker-compose.yml |
-| Lupa kredensial | Kredensial tersimpan di file `.env` |
-| Permission denied pada volume | `sudo chown -R 1000:1000 /path/ke/volume` |
-| SSL Certificates error | Perbarui sertifikat: `sudo certbot renew` |
+| Container gagal start | `docker compose logs -f <service>` |
+| Editor n8n blank / "Connection lost" | Pastikan header WebSocket ada di config Nginx (`Upgrade`, `Connection "upgrade"`) |
+| n8n error "secure cookie" saat akses via IP/HTTP | Akses lewat HTTPS + domain; jangan matikan secure cookie di produksi |
+| Webhook n8n memanggil URL salah | Pastikan `N8N_HOST` & `N8N_PROTOCOL` benar (menjadi `WEBHOOK_URL`) |
+| WAHA session disconnect | Cek `docker stats` (RAM), restart session via dashboard |
+| Kredensial n8n hilang setelah restore | `N8N_ENCRYPTION_KEY` harus sama dengan saat backup dibuat |
+| SSL expired | `sudo certbot renew` lalu `sudo systemctl reload nginx` |
+| Permission denied pada volume | `docker compose logs` dulu — jangan `chown` sembarangan; volume n8n dimiliki UID 1000 |
 
 ---
 
-## 📜 License
-Dokumen ini dapat digunakan secara bebas untuk keperluan pribadi maupun komersial.
+## Lisensi
 
----
-
-### Cara Menggunakan File Ini:
-1. Simpan sebagai `INSTALL_GUIDE.md`
-2. Edit file `.env` sesuai kebutuhan dengan kredensial yang kuat
-3. Pastikan untuk mengganti:
-   - Domain `n8n.example.com` dan `waha.example.com`
-   - Password dan kunci enkripsi dengan nilai yang kuat dan unik
-   - SMTP settings sesuai dengan provider email Anda
-
-### Fitur Dokumen Ini:
-✅ Format terstruktur dengan daftar isi  
-✅ Sintaks code block yang siap copy-paste  
-✅ Konfigurasi keamanan dengan file `.env`  
-✅ Tabel troubleshooting cepat  
-✅ Kompatibel dengan GitHub/GitLab Markdown
+Dokumen ini bebas digunakan untuk keperluan pribadi maupun komersial.

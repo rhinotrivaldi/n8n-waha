@@ -1,0 +1,109 @@
+{
+  "name": "Contoh: Monitor Status Website → WhatsApp",
+  "nodes": [
+    {
+      "id": "schedule",
+      "name": "Setiap Jam",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "fetch",
+      "name": "Ambil Halaman",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 300],
+      "parameters": {
+        "url": "https://example.com/status",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "extract",
+      "name": "Ekstrak Status",
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [640, 300],
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "status",
+              "cssSelector": ".status"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "format",
+      "name": "Format Pesan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [860, 300],
+      "parameters": {
+        "jsCode": "const statusList = $input.all().map(item => item.json.status);\nconst message = `📊 Update Status:\\n\\n${statusList.join('\\n')}`;\n\nreturn [{ json: { chatId: '6281234567890@c.us', message } }];"
+      }
+    },
+    {
+      "id": "send",
+      "name": "Kirim ke WhatsApp (WAHA)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1080, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "http://waha:3000/api/sendText",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "GANTI_DENGAN_WAHA_API_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ session: 'default', chatId: $json.chatId, text: $json.message }) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Setiap Jam": {
+      "main": [[{ "node": "Ambil Halaman", "type": "main", "index": 0 }]]
+    },
+    "Ambil Halaman": {
+      "main": [[{ "node": "Ekstrak Status", "type": "main", "index": 0 }]]
+    },
+    "Ekstrak Status": {
+      "main": [[{ "node": "Format Pesan", "type": "main", "index": 0 }]]
+    },
+    "Format Pesan": {
+      "main": [[{ "node": "Kirim ke WhatsApp (WAHA)", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

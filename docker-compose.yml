@@ -1,47 +1,54 @@
-version: '3.8'
-
 services:
   n8n:
-    image: n8nio/n8n
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: n8n
     restart: unless-stopped
     ports:
-      - "${N8N_PORT}:5678"
+      # ponytail: bind ke localhost saja — akses publik lewat reverse proxy (nginx)
+      - "127.0.0.1:${N8N_PORT:-5678}:5678"
     environment:
-      - TZ=Asia/Jakarta
-      - N8N_BASIC_AUTH_ACTIVE=${N8N_BASIC_AUTH_ACTIVE}
-      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER}
-      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - TZ=${TZ:-Asia/Jakarta}
+      - GENERIC_TIMEZONE=${TZ:-Asia/Jakarta}
+      - NODE_ENV=production
       - N8N_HOST=${N8N_HOST}
       - N8N_PORT=5678
-      - N8N_PROTOCOL=${N8N_PROTOCOL}
-      - N8N_EMAIL_MODE=${N8N_EMAIL_MODE}
-      - SMTP_HOST=${SMTP_HOST}
-      - SMTP_PORT=${SMTP_PORT}
-      - SMTP_USER=${SMTP_USER}
-      - SMTP_PASS=${SMTP_PASS}
-      - SMTP_SENDER=${SMTP_SENDER}
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-https}
+      - WEBHOOK_URL=${N8N_PROTOCOL:-https}://${N8N_HOST}/
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - N8N_RUNNERS_ENABLED=true
+      # SMTP (opsional — untuk undangan user & reset password)
+      - N8N_EMAIL_MODE=${N8N_EMAIL_MODE:-}
+      - N8N_SMTP_HOST=${N8N_SMTP_HOST:-}
+      - N8N_SMTP_PORT=${N8N_SMTP_PORT:-587}
+      - N8N_SMTP_USER=${N8N_SMTP_USER:-}
+      - N8N_SMTP_PASS=${N8N_SMTP_PASS:-}
+      - N8N_SMTP_SENDER=${N8N_SMTP_SENDER:-}
     volumes:
       - n8n_data:/home/node/.n8n
     networks:
-      - automation_network
+      - automation
 
   waha:
-    image: devlikeapro/waha
+    image: devlikeapro/waha:latest
+    container_name: waha
     restart: unless-stopped
     ports:
-      - "${WAHA_PORT}:3000"
+      - "127.0.0.1:${WAHA_PORT:-3000}:3000"
     environment:
-      - TZ=Asia/Jakarta
-      - WHATSAPP_DEFAULT_ENGINE=${WHATSAPP_DEFAULT_ENGINE}
-      - API_KEY=${WAHA_API_KEY}
+      - TZ=${TZ:-Asia/Jakarta}
+      - WHATSAPP_DEFAULT_ENGINE=${WHATSAPP_DEFAULT_ENGINE:-NOWEB}
+      - WAHA_API_KEY=${WAHA_API_KEY}
+      - WAHA_DASHBOARD_USERNAME=${WAHA_DASHBOARD_USERNAME:-admin}
+      - WAHA_DASHBOARD_PASSWORD=${WAHA_DASHBOARD_PASSWORD}
+      - WAHA_BASE_URL=${WAHA_PROTOCOL:-https}://${WAHA_HOST}
     volumes:
       - waha_sessions:/app/.sessions
     networks:
-      - automation_network
+      - automation
 
 networks:
-  automation_network:
+  automation:
     driver: bridge
 
 volumes:
